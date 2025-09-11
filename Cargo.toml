@@ -1,0 +1,21 @@
+[package]
+name = "ecmade"
+authors = ["Travis Brown <travisrobertbrown@gmail.com>"]
+description = "Serde deserializer for JavaScript"
+homepage = "https://github.com/travisbrown/ecmade"
+repository = "https://github.com/travisbrown/ecmade"
+keywords = ["javascript", "serde", "ecmascript"]
+edition = "2024"
+license = "GPL-3.0-only"
+version = "0.1.0"
+
+[dependencies]
+serde = "1"
+swc_ecma_ast = "15"
+thiserror = "2"
+
+[dev-dependencies]
+serde_derive = "1"
+serde_json = "1"
+swc_common = "14"
+swc_ecma_parser = "24"
