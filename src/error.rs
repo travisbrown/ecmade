@@ -5,6 +5,9 @@ use swc_ecma_ast::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[cfg(feature = "parser")]
+    #[error("JavaScript parsing error")]
+    EcmaParse(swc_ecma_parser::error::Error),
     #[error("Invalid object key")]
     InvalidObjectKey(PropName),
     #[error("Invalid number")]
