@@ -73,6 +73,7 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
                 Lit::Str(_) => self.deserialize_str(visitor),
                 _ => Err(Self::Error::UnexpectedExpr(self.expr.into_owned())),
             },
+            Expr::Ident(_) => self.deserialize_str(visitor),
             other => Err(Self::Error::UnexpectedExpr(other.clone())),
         }
     }
@@ -211,6 +212,7 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
             other => match &*other {
                 Expr::Lit(lit) => Err(Error::unexpected_lit(lit, expected)),
                 Expr::Array(_) => Err(Self::Error::invalid_type(Unexpected::Seq, &expected)),
+                Expr::Ident(ident) => visitor.visit_enum(ident.sym.as_str().into_deserializer()),
                 other => Err(Self::Error::UnexpectedExpr(other.clone())),
             },
         }
@@ -358,6 +360,8 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
                 visitor.visit_borrowed_str(str.value.as_str())
             }
             Cow::Owned(Expr::Lit(Lit::Str(str))) => visitor.visit_str(str.value.as_str()),
+            Cow::Borrowed(Expr::Ident(ident)) => visitor.visit_borrowed_str(ident.sym.as_str()),
+            Cow::Owned(Expr::Ident(ident)) => visitor.visit_str(ident.sym.as_str()),
             other => match &*other {
                 Expr::Lit(lit) => Err(Error::unexpected_lit(lit, expected)),
                 Expr::Object(_) => Err(Self::Error::invalid_type(Unexpected::Map, &expected)),
@@ -759,26 +763,41 @@ mod test {
     }
 
     #[derive(Debug, Eq, PartialEq, serde::Deserialize)]
+    enum TestEnum {
+        Orange,
+        Apple {},
+        Pear { name: String },
+    }
+
+    #[derive(Debug, Eq, PartialEq, serde::Deserialize)]
     struct TestStruct<'a> {
         foo: Option<u64>,
         bar: Vec<bool>,
         qux: std::borrow::Cow<'a, str>,
+        fruit: Vec<TestEnum>,
     }
+
+    const SCRIPT_STR: &str = r#"{ foo: 123, "bar": [true, false], qux: "hey", fruit: [Orange, { Apple: {} }, { "Pear": { name: "+?*" } } ] }"#;
+    const JSON_STR: &str = r#"{ "foo": 123, "bar": [true, false], "qux": "hey", "fruit": ["Orange", { "Apple": {} }, { "Pear": { "name": "+?*" } }  ] }"#;
 
     #[test]
     fn test_struct() -> Result<(), Error> {
-        let script_str = "{ foo: 123, \"bar\": [true, false], qux: \"hey\" }";
-        let json_str = "{ \"foo\": 123, \"bar\": [true, false], \"qux\": \"hey\" }";
-
         let expected_test_value = TestStruct {
             foo: Some(123),
             bar: vec![true, false],
             qux: "hey".into(),
+            fruit: vec![
+                TestEnum::Orange,
+                TestEnum::Apple {},
+                TestEnum::Pear {
+                    name: "+?*".to_string(),
+                },
+            ],
         };
 
-        let expected_json_value = serde_json::from_str::<serde_json::Value>(json_str).unwrap();
+        let expected_json_value = serde_json::from_str::<serde_json::Value>(JSON_STR).unwrap();
 
-        let script_js = parse_js(script_str, Default::default())?;
+        let script_js = parse_js(SCRIPT_STR, Default::default())?;
 
         let test_value = super::from_expr::<TestStruct>(&script_js).unwrap();
 
@@ -793,22 +812,26 @@ mod test {
 
     #[test]
     fn test_struct_owned() -> Result<(), Error> {
-        let script_str = "{ foo: 123, \"bar\": [true, false], qux: \"hey\" }";
-        let json_str = "{ \"foo\": 123, \"bar\": [true, false], \"qux\": \"hey\" }";
-
         let expected_test_value = TestStruct {
             foo: Some(123),
             bar: vec![true, false],
             qux: "hey".into(),
+            fruit: vec![
+                TestEnum::Orange,
+                TestEnum::Apple {},
+                TestEnum::Pear {
+                    name: "+?*".to_string(),
+                },
+            ],
         };
 
-        let expected_json_value = serde_json::from_str::<serde_json::Value>(json_str).unwrap();
+        let expected_json_value = serde_json::from_str::<serde_json::Value>(JSON_STR).unwrap();
 
-        let test_value = super::from_str::<TestStruct>(script_str)?;
+        let test_value = super::from_str::<TestStruct>(SCRIPT_STR)?;
 
         assert_eq!(test_value, expected_test_value);
 
-        let json_value = super::from_str::<serde_json::Value>(&script_str).unwrap();
+        let json_value = super::from_str::<serde_json::Value>(SCRIPT_STR).unwrap();
 
         assert_eq!(json_value, expected_json_value);
 
