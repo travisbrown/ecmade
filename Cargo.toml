@@ -7,21 +7,21 @@ repository = "https://github.com/travisbrown/ecmade"
 keywords = ["javascript", "serde", "ecmascript"]
 edition = "2024"
 license = "GPL-3.0-only"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies]
 serde = "1"
 serde_json = { version = "1", optional = true }
-swc_common = { version = "14", optional = true }
-swc_ecma_ast = "15"
-swc_ecma_parser = { version = "24", optional = true }
+swc_common = { version = "15", optional = true }
+swc_ecma_ast = "16"
+swc_ecma_parser = { version = "25", optional = true }
 thiserror = "2"
 
 [dev-dependencies]
 serde_derive = "1"
 serde_json = "1"
-swc_common = "14"
-swc_ecma_parser = "24"
+swc_common = "15"
+swc_ecma_parser = "25"
 
 [features]
 default = ["json", "parser"]
