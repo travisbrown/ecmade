@@ -66,11 +66,11 @@ impl serde::de::Error for Error {
         Self::Serde(serde::de::value::Error::invalid_length(len, exp))
     }
 
-    fn invalid_type(unexp: Unexpected, exp: &dyn serde::de::Expected) -> Self {
+    fn invalid_type(unexp: Unexpected<'_>, exp: &dyn serde::de::Expected) -> Self {
         Self::Serde(serde::de::value::Error::invalid_type(unexp, exp))
     }
 
-    fn invalid_value(unexp: Unexpected, exp: &dyn serde::de::Expected) -> Self {
+    fn invalid_value(unexp: Unexpected<'_>, exp: &dyn serde::de::Expected) -> Self {
         Self::Serde(serde::de::value::Error::invalid_value(unexp, exp))
     }
 

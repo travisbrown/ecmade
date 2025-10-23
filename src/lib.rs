@@ -1,3 +1,6 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, rust_2018_idioms)]
+#![allow(clippy::missing_errors_doc)]
+#![forbid(unsafe_code)]
 use serde::de::{
     EnumAccess, Error as _, IntoDeserializer, MapAccess, SeqAccess, Unexpected, VariantAccess,
     Visitor,
@@ -12,7 +15,7 @@ use error::Error;
 
 #[cfg(feature = "parser")]
 pub fn from_str<'a: 'de, 'de, T: serde::Deserialize<'de>>(expr_str: &'a str) -> Result<T, Error> {
-    from_str_with_version(expr_str, Default::default())
+    from_str_with_version(expr_str, swc_ecma_ast::EsVersion::default())
 }
 
 #[cfg(feature = "parser")]
@@ -21,12 +24,12 @@ pub fn from_str_with_version<'a: 'de, 'de, T: serde::Deserialize<'de>>(
     version: swc_ecma_ast::EsVersion,
 ) -> Result<T, Error> {
     let lexer = swc_ecma_parser::Lexer::new(
-        swc_ecma_parser::Syntax::Es(Default::default()),
+        swc_ecma_parser::Syntax::Es(swc_ecma_parser::EsSyntax::default()),
         version,
         swc_ecma_parser::StringInput::new(
             expr_str,
             swc_common::BytePos(0),
-            swc_common::BytePos(expr_str.len() as u32),
+            swc_common::BytePos(u32::try_from(expr_str.len()).unwrap_or(u32::MAX)),
         ),
         None,
     );
@@ -118,8 +121,14 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
             Expr::Lit(Lit::Str(str)) => {
                 let mut chars = str.value.chars();
 
-                match chars.next() {
-                    Some(ch) => {
+                chars.next().map_or_else(
+                    || {
+                        Err(Self::Error::invalid_value(
+                            Unexpected::Str(str.value.as_str()),
+                            &expected,
+                        ))
+                    },
+                    |ch| {
                         if chars.next().is_none() {
                             visitor.visit_char(ch)
                         } else {
@@ -128,12 +137,8 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
                                 &expected,
                             ))
                         }
-                    }
-                    None => Err(Self::Error::invalid_value(
-                        Unexpected::Str(str.value.as_str()),
-                        &expected,
-                    )),
-                }
+                    },
+                )
             }
             Expr::Lit(lit) => Err(Error::unexpected_lit(lit, expected)),
             Expr::Object(_) => Err(Self::Error::invalid_type(Unexpected::Map, &expected)),
@@ -195,10 +200,10 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
                                     value: Cow::Owned(*kvp.value),
                                 })
                             }
-                            other => Err(Self::Error::UnexpectedProp(Box::new(other.clone()))),
+                            other => Err(Self::Error::UnexpectedProp(Box::new(other))),
                         },
                         Some(PropOrSpread::Spread(spread)) => {
-                            Err(Self::Error::UnexpectedSpread(spread.clone()))
+                            Err(Self::Error::UnexpectedSpread(spread))
                         }
                         None => {
                             // We already checked the length, but here for completeness.
@@ -222,7 +227,11 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
         let expected = "f32";
 
         match &*self.expr {
-            Expr::Lit(Lit::Num(number)) => visitor.visit_f32(number.value as f32),
+            Expr::Lit(Lit::Num(number)) =>
+            {
+                #[allow(clippy::cast_possible_truncation)]
+                visitor.visit_f32(number.value as f32)
+            }
             Expr::Lit(lit) => Err(Error::unexpected_lit(lit, expected)),
             Expr::Object(_) => Err(Self::Error::invalid_type(Unexpected::Map, &expected)),
             Expr::Array(_) => Err(Self::Error::invalid_type(Unexpected::Seq, &expected)),
@@ -637,9 +646,9 @@ impl<'de> MapAccess<'de> for Map<'de> {
 
                             seed.deserialize(key_str.into_deserializer())
                         }
-                        other => Err(Error::UnexpectedProp(Box::new(other.clone()))),
+                        other => Err(Error::UnexpectedProp(Box::new(other))),
                     },
-                    PropOrSpread::Spread(spread) => Err(Error::UnexpectedSpread(spread.clone())),
+                    PropOrSpread::Spread(spread) => Err(Error::UnexpectedSpread(spread)),
                 })
                 .map_or(Ok(None), |value| value.map(Some)),
         }
@@ -799,7 +808,7 @@ mod test {
 
         let script_js = parse_js(SCRIPT_STR, Default::default())?;
 
-        let test_value = super::from_expr::<TestStruct>(&script_js).unwrap();
+        let test_value = super::from_expr::<TestStruct<'_>>(&script_js).unwrap();
 
         assert_eq!(test_value, expected_test_value);
 
@@ -827,7 +836,7 @@ mod test {
 
         let expected_json_value = serde_json::from_str::<serde_json::Value>(JSON_STR).unwrap();
 
-        let test_value = super::from_str::<TestStruct>(SCRIPT_STR)?;
+        let test_value = super::from_str::<TestStruct<'_>>(SCRIPT_STR)?;
 
         assert_eq!(test_value, expected_test_value);
 
