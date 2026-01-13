@@ -12,16 +12,16 @@ version = "0.2.0"
 [dependencies]
 serde = "1"
 serde_json = { version = "1", optional = true }
-swc_common = { version = "15", optional = true }
-swc_ecma_ast = "16"
-swc_ecma_parser = { version = "25", optional = true }
+swc_common = { version = "18", optional = true }
+swc_ecma_ast = "19"
+swc_ecma_parser = { version = "32", optional = true }
 thiserror = "2"
 
 [dev-dependencies]
 serde_derive = "1"
 serde_json = "1"
-swc_common = "15"
-swc_ecma_parser = "25"
+swc_common = "18"
+swc_ecma_parser = "32"
 
 [features]
 default = ["json", "parser"]

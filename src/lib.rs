@@ -119,21 +119,26 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
 
         match &*self.expr {
             Expr::Lit(Lit::Str(str)) => {
-                let mut chars = str.value.chars();
+                let mut chars = str.value.code_points();
 
                 chars.next().map_or_else(
                     || {
                         Err(Self::Error::invalid_value(
-                            Unexpected::Str(str.value.as_str()),
+                            Unexpected::Str(&str.value.to_string_lossy()),
                             &expected,
                         ))
                     },
-                    |ch| {
+                    |code_point| {
                         if chars.next().is_none() {
-                            visitor.visit_char(ch)
+                            visitor.visit_char(code_point.to_char().ok_or_else(|| {
+                                Self::Error::invalid_value(
+                                    Unexpected::Str(&str.value.to_string_lossy()),
+                                    &expected,
+                                )
+                            })?)
                         } else {
                             Err(Self::Error::invalid_value(
-                                Unexpected::Str(str.value.as_str()),
+                                Unexpected::Str(&str.value.to_string_lossy()),
                                 &expected,
                             ))
                         }
@@ -156,12 +161,18 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
         let expected = "enumeration";
 
         match self.expr {
-            Cow::Borrowed(Expr::Lit(Lit::Str(str))) => {
-                visitor.visit_enum(str.value.as_str().into_deserializer())
-            }
-            Cow::Owned(Expr::Lit(Lit::Str(str))) => {
-                visitor.visit_enum(str.value.as_str().into_deserializer())
-            }
+            Cow::Borrowed(Expr::Lit(lit @ Lit::Str(str))) => visitor.visit_enum(
+                str.value
+                    .as_str()
+                    .ok_or_else(|| Error::unexpected_lit(lit, expected))?
+                    .into_deserializer(),
+            ),
+            Cow::Owned(Expr::Lit(ref lit @ Lit::Str(ref str))) => visitor.visit_enum(
+                str.value
+                    .as_str()
+                    .ok_or_else(|| Error::unexpected_lit(lit, expected))?
+                    .into_deserializer(),
+            ),
             Cow::Borrowed(Expr::Object(ObjectLit { props, .. })) => {
                 if props.len() == 1 {
                     match &props[0] {
@@ -365,10 +376,16 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
         let expected = "string";
 
         match self.expr {
-            Cow::Borrowed(Expr::Lit(Lit::Str(str))) => {
-                visitor.visit_borrowed_str(str.value.as_str())
-            }
-            Cow::Owned(Expr::Lit(Lit::Str(str))) => visitor.visit_str(str.value.as_str()),
+            Cow::Borrowed(Expr::Lit(lit @ Lit::Str(str))) => visitor.visit_borrowed_str(
+                str.value
+                    .as_str()
+                    .ok_or_else(|| Error::unexpected_lit(lit, expected))?,
+            ),
+            Cow::Owned(Expr::Lit(ref lit @ Lit::Str(ref str))) => visitor.visit_str(
+                str.value
+                    .as_str()
+                    .ok_or_else(|| Error::unexpected_lit(lit, expected))?,
+            ),
             Cow::Borrowed(Expr::Ident(ident)) => visitor.visit_borrowed_str(ident.sym.as_str()),
             Cow::Owned(Expr::Ident(ident)) => visitor.visit_str(ident.sym.as_str()),
             other => match &*other {
@@ -511,7 +528,7 @@ impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
 fn prop_name_to_str(prop_name: &PropName) -> Option<&str> {
     prop_name
         .as_str()
-        .map(|str| str.value.as_str())
+        .and_then(|str| str.value.as_str())
         .or_else(|| prop_name.as_ident().map(|ident| ident.sym.as_str()))
 }
 

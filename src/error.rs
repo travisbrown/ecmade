@@ -48,7 +48,9 @@ impl Error {
                 |unexpected| Self::invalid_type(unexpected, &expected),
             ),
             Lit::Regex(regex) => Self::UnexpectedRegex(regex.clone()),
-            Lit::Str(str) => Self::invalid_type(Unexpected::Str(str.value.as_str()), &expected),
+            Lit::Str(str) => {
+                Self::invalid_type(Unexpected::Str(&str.value.to_string_lossy()), &expected)
+            }
         }
     }
 }
