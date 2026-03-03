@@ -1,5 +1,4 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, rust_2018_idioms)]
-#![allow(clippy::missing_errors_doc)]
 #![forbid(unsafe_code)]
 use serde::de::{
     EnumAccess, Error as _, IntoDeserializer, MapAccess, SeqAccess, Unexpected, VariantAccess,
@@ -13,11 +12,26 @@ mod number;
 
 use error::Error;
 
+/// Deserialize a JavaScript expression string into type `T`.
+///
+/// Parses `expr_str` as a JavaScript expression using the default
+/// [`EsVersion`](swc_ecma_ast::EsVersion), then deserializes the AST into `T`.
+///
+/// # Errors
+///
+/// Returns [`Error::EcmaParse`] if the string is not valid JavaScript.
+/// Returns a deserialization [`Error`] if the expression cannot be converted to `T`.
 #[cfg(feature = "parser")]
 pub fn from_str<'a: 'de, 'de, T: serde::Deserialize<'de>>(expr_str: &'a str) -> Result<T, Error> {
     from_str_with_version(expr_str, swc_ecma_ast::EsVersion::default())
 }
 
+/// Deserialize a JavaScript expression string into type `T` using the given ECMAScript version.
+///
+/// # Errors
+///
+/// Returns [`Error::EcmaParse`] if the string is not valid JavaScript for `version`.
+/// Returns a deserialization [`Error`] if the expression cannot be converted to `T`.
 #[cfg(feature = "parser")]
 pub fn from_str_with_version<'a: 'de, 'de, T: serde::Deserialize<'de>>(
     expr_str: &'a str,
@@ -38,18 +52,27 @@ pub fn from_str_with_version<'a: 'de, 'de, T: serde::Deserialize<'de>>(
     let expr = parser.parse_expr().map_err(Error::EcmaParse)?;
 
     T::deserialize(Deserializer {
-        expr: std::borrow::Cow::Owned(*expr),
+        expr: Cow::Owned(*expr),
     })
 }
 
+/// Deserialize a JavaScript AST expression into type `T`.
+///
+/// # Errors
+///
+/// Returns a deserialization [`Error`] if the expression cannot be converted to `T`.
 pub fn from_expr<'a: 'de, 'de, T: serde::Deserialize<'de>>(expr: &'a Expr) -> Result<T, Error> {
     T::deserialize(Deserializer {
-        expr: std::borrow::Cow::Borrowed(expr),
+        expr: Cow::Borrowed(expr),
     })
 }
 
+/// A serde [`Deserializer`](serde::Deserializer) backed by a JavaScript AST expression node.
+///
+/// Prefer the [`from_expr`] and [`from_str`] free functions over constructing this directly.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Deserializer<'de> {
-    expr: std::borrow::Cow<'de, Expr>,
+    expr: Cow<'de, Expr>,
 }
 
 impl<'de> serde::de::Deserializer<'de> for Deserializer<'de> {
@@ -738,6 +761,7 @@ impl<'de> VariantAccess<'de> for Enum<'de> {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
     use swc_common::BytePos;
     use swc_ecma_ast::{EsVersion, Expr};
     use swc_ecma_parser::{Parser, StringInput, Syntax, lexer::Lexer};
@@ -754,7 +778,11 @@ mod test {
         let lexer = Lexer::new(
             Syntax::Es(Default::default()),
             version,
-            StringInput::new(script, BytePos(0), BytePos(script.as_bytes().len() as u32)),
+            StringInput::new(
+                script,
+                BytePos(0),
+                BytePos(u32::try_from(script.as_bytes().len()).unwrap_or(u32::MAX)),
+            ),
             None,
         );
 
@@ -799,7 +827,7 @@ mod test {
     struct TestStruct<'a> {
         foo: Option<u64>,
         bar: Vec<bool>,
-        qux: std::borrow::Cow<'a, str>,
+        qux: Cow<'a, str>,
         fruit: Vec<TestEnum>,
     }
 

@@ -3,40 +3,60 @@ use swc_ecma_ast::{
     BigInt, Expr, ExprOrSpread, JSXText, Lit, Number, Prop, PropName, Regex, SpreadElement,
 };
 
+/// Errors that can occur while deserializing a JavaScript AST expression.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The JavaScript source text could not be parsed.
     #[cfg(feature = "parser")]
     #[error("JavaScript parsing error")]
     EcmaParse(swc_ecma_parser::error::Error),
+    /// An object property had a key that cannot be used as a Serde map key (e.g. a computed or
+    /// numeric key).
     #[error("Invalid object key")]
     InvalidObjectKey(PropName),
+    /// A number literal's value cannot be represented in the requested type.
     #[error("Invalid number")]
     InvalidNumber(Number),
+    /// A literal value is invalid in context.
     #[error("Invalid literal")]
     InvalidLiteral(Lit),
+    /// An object property has an unsupported form (e.g. shorthand or method).
     #[error("Invalid prop")]
     InvalidProp(Box<Prop>),
+    /// An array element is a hole (`[,]`) or otherwise invalid.
     #[error("Invalid array element")]
     InvalidArrayElement(Option<ExprOrSpread>),
+    /// A `BigInt` literal was encountered; these are not representable as Serde values.
     #[error("Unexpected big integer")]
     UnexpectedBigInt(BigInt),
+    /// A JSX text node was encountered in a non-JSX context.
     #[error("Unexpected JSX text")]
     UnexpectedJsxText(JSXText),
+    /// A regex literal was encountered; these are not representable as Serde values.
     #[error("Unexpected regex")]
     UnexpectedRegex(Regex),
+    /// A spread element was encountered where a plain property was expected.
     #[error("Unexpected spread")]
     UnexpectedSpread(SpreadElement),
+    /// A property with an unsupported form was encountered.
     #[error("Unexpected property")]
     UnexpectedProp(Box<Prop>),
+    /// An expression type that cannot be mapped to a Serde value was encountered.
     #[error("Unexpected expression")]
     UnexpectedExpr(Expr),
+    /// [`serde::de::MapAccess::next_value_seed`] was called before a key was consumed.
     #[error("Expected field value")]
     ExpectedFieldValue,
+    /// A Serde-level error (e.g. unknown field, missing field, type mismatch).
     #[error("Serde error")]
     Serde(serde::de::value::Error),
 }
 
 impl Error {
+    /// Construct an appropriate error for an unexpected literal value.
+    ///
+    /// Maps each [`Lit`] variant to the most informative serde [`Unexpected`] type,
+    /// falling back to dedicated error variants for `BigInt`, `JSXText`, and `Regex`.
     pub(super) fn unexpected_lit(lit: &Lit, expected: &str) -> Self {
         match lit {
             Lit::Bool(bool) => Self::invalid_type(Unexpected::Bool(bool.value), &expected),
