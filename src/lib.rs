@@ -776,12 +776,12 @@ mod test {
 
     pub fn parse_js(script: &str, version: EsVersion) -> Result<Box<Expr>, Error> {
         let lexer = Lexer::new(
-            Syntax::Es(Default::default()),
+            Syntax::Es(swc_ecma_parser::EsSyntax::default()),
             version,
             StringInput::new(
                 script,
                 BytePos(0),
-                BytePos(u32::try_from(script.as_bytes().len()).unwrap_or(u32::MAX)),
+                BytePos(u32::try_from(script.len()).unwrap_or(u32::MAX)),
             ),
             None,
         );
@@ -799,7 +799,7 @@ mod test {
         let example_path = "../examples/google-play-chess.js";
         let script = parse_js(
             include_str!("../examples/google-play-chess.js"),
-            Default::default(),
+            EsVersion::default(),
         )?;
 
         match &*script {
@@ -808,7 +808,7 @@ mod test {
 
                 let json = super::from_expr::<serde_json::Value>(object_lit_expr)?;
 
-                assert_eq!(json.as_object().map(|object| object.len()), Some(4));
+                assert_eq!(json.as_object().map(serde_json::Map::len), Some(4));
 
                 Ok(())
             }
@@ -851,7 +851,7 @@ mod test {
 
         let expected_json_value = serde_json::from_str::<serde_json::Value>(JSON_STR).unwrap();
 
-        let script_js = parse_js(SCRIPT_STR, Default::default())?;
+        let script_js = parse_js(SCRIPT_STR, EsVersion::default())?;
 
         let test_value = super::from_expr::<TestStruct<'_>>(&script_js).unwrap();
 
